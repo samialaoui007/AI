@@ -1,0 +1,4 @@
+import {NextRequest,NextResponse} from 'next/server';import {authorized,deny} from '@/lib/auth';import {db,ensureSchema} from '@/lib/turso';
+export const runtime='nodejs';type Context={params:Promise<{id:string}>};
+export async function PATCH(req:NextRequest,ctx:Context){if(!authorized(req))return deny();const {id}=await ctx.params;const v=await req.json().catch(()=>null);if(!['active','disabled'].includes(v?.status))return NextResponse.json({error:'حالة غير صالحة'},{status:400});await ensureSchema();await db().execute({sql:'UPDATE api_keys SET status=? WHERE id=?',args:[v.status,id]});return NextResponse.json({ok:true})}
+export async function DELETE(req:NextRequest,ctx:Context){if(!authorized(req))return deny();const {id}=await ctx.params;await ensureSchema();await db().execute({sql:'DELETE FROM api_keys WHERE id=?',args:[id]});return NextResponse.json({ok:true})}
