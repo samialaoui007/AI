@@ -1,5 +1,0 @@
-import {NextRequest,NextResponse} from 'next/server';
-import {authorized,deny} from '@/lib/auth';import {db,ensureSchema,ApiKey,safeKey} from '@/lib/turso';
-export const runtime='nodejs';
-export async function GET(req:NextRequest){if(!authorized(req))return deny();await ensureSchema();const r=await db().execute('SELECT * FROM api_keys ORDER BY created_at,id');return NextResponse.json(r.rows.map(x=>safeKey(x as unknown as ApiKey)))}
-export async function POST(req:NextRequest){if(!authorized(req))return deny();const v=await req.json().catch(()=>null);if(!['kie','cometapi'].includes(v?.provider)||typeof v?.api_key!=='string'||v.api_key.length<8)return NextResponse.json({error:'المزود أو المفتاح غير صالح'},{status:400});await ensureSchema();const dup=await db().execute({sql:'SELECT id FROM api_keys WHERE provider=? AND api_key=?',args:[v.provider,v.api_key]});if(dup.rows.length)return NextResponse.json({error:'المفتاح مكرر'},{status:409});await db().execute({sql:'INSERT INTO api_keys(id,provider,label,api_key) VALUES(?,?,?,?)',args:[crypto.randomUUID(),v.provider,String(v.label||'').slice(0,80),v.api_key]});return NextResponse.json({ok:true},{status:201})}
