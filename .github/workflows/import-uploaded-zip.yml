@@ -1,0 +1,59 @@
+name: Replace repository with uploaded media generator
+on:
+  push:
+    branches: [main]
+    paths:
+      - media-generator-main.zip
+permissions:
+  contents: write
+jobs:
+  replace:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Validate and replace repository files
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import pathlib, shutil, tempfile, zipfile
+          root = pathlib.Path.cwd()
+          archive = root / 'media-generator-main.zip'
+          with zipfile.ZipFile(archive) as z:
+              infos = [i for i in z.infolist() if not i.is_dir()]
+              if not infos:
+                  raise RuntimeError('ZIP is empty')
+              prefix = 'media-generator-main/'
+              for i in infos:
+                  p = pathlib.PurePosixPath(i.filename)
+                  if not i.filename.startswith(prefix) or p.is_absolute() or '..' in p.parts:
+                      raise RuntimeError('Unsafe ZIP entry: ' + i.filename)
+                  if (i.external_attr >> 16) & 0o170000 == 0o120000:
+                      raise RuntimeError('Symlinks are not allowed in archive')
+              if not any(i.filename == prefix + 'package.json' for i in infos):
+                  raise RuntimeError('No package.json at expected source root')
+              with tempfile.TemporaryDirectory() as temp:
+                  target = pathlib.Path(temp)
+                  for i in infos:
+                      rel = pathlib.PurePosixPath(i.filename).relative_to('media-generator-main')
+                      dest = target.joinpath(*rel.parts)
+                      dest.parent.mkdir(parents=True, exist_ok=True)
+                      dest.write_bytes(z.read(i))
+                  for child in root.iterdir():
+                      if child.name == '.git':
+                          continue
+                      if child.is_dir():
+                          shutil.rmtree(child)
+                      else:
+                          child.unlink()
+                  for child in target.iterdir():
+                      shutil.move(str(child), str(root / child.name))
+          PY
+      - name: Commit replacement
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet || git commit -m "Replace repository with uploaded media-generator-main source"
+          git push origin HEAD:main
