@@ -1,0 +1,24 @@
+name: Expand project source
+on:
+  push:
+    branches: [main]
+    paths: [source.tar.xz.b64]
+permissions:
+  contents: write
+jobs:
+  expand:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract source files
+        run: |
+          base64 -d source.tar.xz.b64 > source.tar.xz
+          tar -xJf source.tar.xz
+          rm source.tar.xz source.tar.xz.b64
+      - name: Commit project
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet || git commit -m "Add MCP Media Generator source"
+          git push
